@@ -18,19 +18,9 @@ export type KeyPair = {
 };
 
 export class PallierEncryption {
-      public pub:
-            | {
-                    n: bigint;
-                    n2: bigint;
-                    g: bigint;
-              }
-            | undefined;
-      public priv:
-            | {
-                    lambda: bigint;
-                    mu: bigint;
-              }
-            | undefined;
+      public pub: PublicKey | undefined;
+      public priv: PrivateKey | undefined;
+
       public p: bigint | undefined;
       public q: bigint | undefined;
       public isInitialized: boolean = false;
@@ -81,7 +71,7 @@ export class PallierEncryption {
       private getKeys = (p: bigint, q: bigint, n: bigint, g: bigint): KeyPair => {
             const n2 = n ** 2n;
             const lambda = this.calculateLambda(p, q);
-            const mu = this.calculateMu(g, lambda, n, n2);
+            const mu = this.calculateDecryptionCoefficient(g, lambda, n, n2);
 
             if (!mu) {
                   throw new Error("mu does not exist");
@@ -125,7 +115,7 @@ export class PallierEncryption {
             (x: bigint): bigint =>
                   (x - 1n) / n;
 
-      private calculateMu = (
+      private calculateDecryptionCoefficient = (
             g: bigint,
             lambda: bigint,
             n: bigint,
