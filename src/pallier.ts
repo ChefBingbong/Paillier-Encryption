@@ -1,21 +1,6 @@
 import { lcm, modInv, modPow, primeSync, randBetween } from "bigint-crypto-utils";
 import { getBitLength } from "./utils";
-
-export type PublicKey = {
-      readonly n: bigint;
-      readonly n2: bigint;
-      readonly g: bigint;
-};
-
-export type PrivateKey = {
-      readonly lambda: bigint;
-      readonly mu: bigint;
-};
-
-export type KeyPair = {
-      readonly pub: PublicKey;
-      readonly priv: PrivateKey;
-};
+import { KeyPair, PrivateKey, PublicKey } from "./types";
 
 export class PallierEncryption {
       public pub: PublicKey | undefined;
@@ -30,45 +15,39 @@ export class PallierEncryption {
             this.isInitialized = true;
       }
 
-      public encrypt =
-            ({ g, n, n2 }: PublicKey) =>
-            (plainText: bigint): bigint => {
-                  if (!this.isInitialized)
-                        throw new Error(`Pub/Priv keys havent been generated yet`);
-                  const r = randBetween(n);
-                  return (modPow(g, plainText, n2) * modPow(r, n, n2)) % n2;
-            };
+      public encrypt = (plainText: bigint): bigint => {
+            if (!this.isInitialized)
+                  throw new Error(`Pub/Priv keys havent been generated yet`);
+            const { n, n2, g } = this.pub;
+            const r = randBetween(n);
+            return (modPow(g, plainText, n2) * modPow(r, n, n2)) % n2;
+      };
 
-      public decrypt =
-            ({ priv: { lambda, mu }, pub: { n, n2 } }: KeyPair) =>
-            (cipherText: bigint): bigint => {
-                  if (!this.isInitialized)
-                        throw new Error(`Pub/Priv keys havent been generated yet`);
-                  const L = this.computeDecryptionShift(n);
-                  return (L(modPow(cipherText, lambda, n2)) * mu) % n;
-            };
+      public decrypt = (cipherText: bigint): bigint => {
+            if (!this.isInitialized)
+                  throw new Error(`Pub/Priv keys havent been generated yet`);
+            const { lambda, mu } = this.priv;
+            const { n, n2 } = this.pub;
+            const L = this.computeDecryptionShift(n);
+            return (L(modPow(cipherText, lambda, n2)) * mu) % n;
+      };
 
-      public add =
-            ({ n2 }: PublicKey) =>
-            (a: bigint, b: bigint): bigint =>
-                  (a * b) % n2;
+      public add = (a: bigint, b: bigint): bigint => (a * b) % this.pub.n2;
 
-      public multiply =
-            (publicKey: PublicKey) =>
-            (cipherText: bigint, plainText: bigint): bigint => {
-                  if (!this.isInitialized)
-                        throw new Error(`Pub/Priv keys havent been generated yet`);
-                  if (plainText === 0n) {
-                        return this.encrypt(publicKey)(0n);
-                  }
-                  if (plainText === 1n) {
-                        const encryptedZero = this.encrypt(publicKey)(0n);
-                        return this.add(publicKey)(cipherText, encryptedZero);
-                  }
-                  return modPow(cipherText, plainText, publicKey.n2);
-            };
+      public multiply = (cipherText: bigint, plainText: bigint): bigint => {
+            if (!this.isInitialized)
+                  throw new Error(`Pub/Priv keys havent been generated yet`);
+            if (plainText === 0n) {
+                  return this.encrypt(0n);
+            }
+            if (plainText === 1n) {
+                  const encryptedZero = this.encrypt(0n);
+                  return this.add(cipherText, encryptedZero);
+            }
+            return modPow(cipherText, plainText, this.pub.n2);
+      };
 
-      private getKeys = (p: bigint, q: bigint, n: bigint, g: bigint): KeyPair => {
+      public getKeys = (p: bigint, q: bigint, n: bigint, g: bigint): KeyPair => {
             const n2 = n ** 2n;
             const lambda = this.calculateLambda(p, q);
             const mu = this.calculateDecryptionCoefficient(g, lambda, n, n2);
@@ -82,7 +61,6 @@ export class PallierEncryption {
             return { pub: this.pub, priv: this.priv };
       };
 
-      // Adapted from https://github.com/juanelas/paillier-bigint/blob/904164e/src/js/index.js#L98-L102
       private generateGenerator = (n: bigint, n2 = n ** 2n): bigint => {
             const alpha = randBetween(n);
             const beta = randBetween(n);
@@ -110,12 +88,12 @@ export class PallierEncryption {
             }
       };
 
-      private computeDecryptionShift =
+      public computeDecryptionShift =
             (n: bigint) =>
             (x: bigint): bigint =>
                   (x - 1n) / n;
 
-      private calculateDecryptionCoefficient = (
+      public calculateDecryptionCoefficient = (
             g: bigint,
             lambda: bigint,
             n: bigint,
@@ -125,6 +103,5 @@ export class PallierEncryption {
             return modInv(L(modPow(g, lambda, n2)), n);
       };
 
-      private calculateLambda = (p: bigint, q: bigint): bigint =>
-            lcm(p - 1n, q - 1n);
+      public calculateLambda = (p: bigint, q: bigint): bigint => lcm(p - 1n, q - 1n);
 }
